@@ -71,6 +71,9 @@ jobs:
 
   deploy-web:
     if: github.ref == 'refs/heads/main'
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     needs: web
     runs-on: ubuntu-latest
     environment:
@@ -106,8 +109,13 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          name: apk
           path: dist
-          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: ios-simulator
+          path: dist
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
