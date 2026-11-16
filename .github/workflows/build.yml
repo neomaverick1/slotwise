@@ -45,14 +45,25 @@ jobs:
           flutter build apk --release --split-per-abi --target-platform android-arm64 \
             --build-name 1.0.${{ github.run_number }} --build-number ${{ github.run_number }} \
             --dart-define=STRIPE_PAYMENT_LINK=${{ vars.STRIPE_PAYMENT_LINK }}
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk slotwise.apk
+          flutter build appbundle --release \
+            --build-name 1.0.${{ github.run_number }} --build-number ${{ github.run_number }} \
+            --dart-define=STRIPE_PAYMENT_LINK=${{ vars.STRIPE_PAYMENT_LINK }}
+      - name: Sign the APK and the Google Play bundle
+        env:
+          UPLOAD_JKS_B64: ${{ secrets.UPLOAD_JKS_B64 }}
+          UPLOAD_STORE_PASSWORD: ${{ secrets.UPLOAD_STORE_PASSWORD }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+        run: bash .github/sign-android.sh build/app/outputs/flutter-apk/app-arm64-v8a-release.apk slotwise.apk build/app/outputs/bundle/release/app-release.aab slotwise-Play.aab
       - uses: actions/upload-artifact@v4
         with:
           name: apk
-          path: slotwise.apk
+          path: |
+            slotwise.apk
+            slotwise-Play.aab
 
   web:
-    needs: test
+    needs: [test, android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -65,6 +76,12 @@ jobs:
           flutter build web --release --no-web-resources-cdn --base-href /slotwise/ \
             --dart-define=STRIPE_PAYMENT_LINK=${{ vars.STRIPE_PAYMENT_LINK }}
           cp build/web/index.html build/web/404.html
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: app-download
+      - name: Put the APK and the Get the app button on the site
+        run: node .github/add-download.mjs build/web app-download/slotwise.apk "Slotwise" web/icons/Icon-192.png /${{ github.event.repository.name }}/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/web
@@ -122,7 +139,9 @@ jobs:
           name: Slotwise 1.0.${{ github.run_number }}
           make_latest: true
           body: |
-            **Android:** download `slotwise.apk` and install it (allow installs from your browser).
+            **Android:** download `slotwise.apk` (also on the website's **Android app** button) and install it (allow installs from your browser).
+            **Google Play:** `slotwise-Play.aab` is the bundle for the Play Console.
             **iPhone simulator:** unzip `Slotwise-ios-simulator.zip` and drag `Runner.app` onto a booted simulator.
             **Web:** https://neomaverick1.github.io/slotwise/
           files: dist/*
+
